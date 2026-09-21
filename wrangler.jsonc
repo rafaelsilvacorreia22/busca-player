@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "busca-player",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-15",
+  "observability": {
+    "enabled": true
+  },
+  // A cada 5 minutos: expira os grupos vencidos (apagando os botões) e limpa a
+  // fila. É o que sustenta a regra "se está com botão, está valendo".
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "busca-player",
+      "database_id": "eef1133a-e418-455b-89f5-725c78f5f49a"
+    }
+  ]
+}
