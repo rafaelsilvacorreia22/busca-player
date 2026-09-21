@@ -17,7 +17,7 @@ Roda em Cloudflare Worker + D1. Já está publicado em
 
 ---
 
-## O que falta fazer (sua parte)
+## Como usar no seu servidor
 
 ### 1. Criar a aplicação no Discord
 
