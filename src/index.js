@@ -42,7 +42,13 @@ async function executarComSeguranca(env, interacao, handler, rotulo) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            content: "Deu ruim aqui do meu lado. Tenta de novo em alguns segundos.",
+            // O erro cru vai junto, só para quem rodou o comando (mensagem
+            // efêmera). Num bot de servidor próprio, saber o motivo vale mais
+            // do que esconder: quase sempre é permissão faltando, e a mensagem
+            // do Discord diz exatamente qual.
+            content:
+              `Deu ruim aqui do meu lado:\n\`\`\`\n` +
+              `${(err.message ?? "erro desconhecido").slice(0, 1600)}\n\`\`\``,
             flags: EFEMERA,
           }),
         }
