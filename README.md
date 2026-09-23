@@ -10,7 +10,7 @@ pessoas param de tentar. Este bot ataca as quatro causas disso.
 
 ## Como funciona no dia a dia
 
-### 1. Cada um marca o que joga — e só é avisado disso
+### 1. Cada um marca o que joga e só é avisado disso
 
 Uma mensagem fixa no canal tem um botão por jogo. Clicou, ganhou o cargo daquele
 jogo; clicou de novo, saiu.
@@ -29,7 +29,7 @@ de grupo. Sem isso vira abuso de ping em uma semana.
 ```
 
 O bot publica um card com o botão **"Tô dentro (1/3)"**. Entrar é um clique, não
-uma mensagem pública para um estranho — é isso que derruba o custo social de
+uma mensagem pública para um estranho é isso que derruba o custo social de
 responder. O card mostra ao vivo quem já entrou e quantas vagas sobraram.
 
 Quem abriu já entra contado. `vagas:3` significa você + 2.
@@ -46,9 +46,8 @@ acumula card morto.
 Exceção: grupo que gerou thread não é apagado. No Discord, apagar a mensagem
 apaga a thread junto — e é lá que a galera combinou de jogar.
 
-### 4. `/avisar` — para quando não tem ninguém online
+### 4. `/avisar` para quando não tem ninguém online
 
-Esta é a que faz servidor pequeno parecer grande.
 
 ```
 /avisar jogo:ARC Raiders
@@ -120,7 +119,7 @@ Roda em Cloudflare Worker + D1. Ambos cabem no plano gratuito com folga.
 2. Dê um nome e suba um ícone em **General Information**
 3. Copie a **PUBLIC KEY** (dessa mesma página)
 4. Menu **Bot** → **Reset Token** → copie. **Aparece uma vez só.**
-5. Ainda em **Bot**, deixe os três *Privileged Gateway Intents* **desligados** —
+5. Ainda em **Bot**, deixe os três *Privileged Gateway Intents* **desligados**
    este bot não lê mensagens nem presença
 
 ### 2. Publicar o worker
@@ -206,7 +205,7 @@ comandos**, limite `/grupo` e `/avisar` a esse canal só.
 
 ## As duas permissões que quebram na prática
 
-Se algo não funcionar, é quase certo que seja uma destas — as duas dão erro
+Se algo não funcionar, é quase certo que seja uma dessas as duas dão erro
 silencioso ou confuso.
 
 **1. O cargo do bot precisa estar ACIMA dos cargos de jogo.**
@@ -222,7 +221,7 @@ do canal**, adicione o cargo do bot e libere: *Ver canal*, *Enviar mensagens*,
 públicos*, *Enviar mensagens em tópicos*, *Ver histórico*.
 
 Quando um comando falha, o bot responde com a mensagem crua do Discord numa
-mensagem que só você vê — normalmente ela já diz qual permissão falta.
+mensagem que só você vê normalmente ela já diz qual permissão falta.
 
 ---
 
@@ -266,7 +265,7 @@ npx wrangler d1 execute busca-player --remote --file=migracoes/001-apagar-cards-
 
 Não usa gateway nem conexão permanente: tudo são interações HTTP assinadas, o que
 permite rodar num Worker sem servidor ligado. A contrapartida é que o bot não lê
-mensagens comuns nem vê quem está jogando o quê — tudo passa por comando e botão.
+mensagens comuns nem vê quem está jogando o quê tudo passa por comando e botão.
 
 | Arquivo | Responsabilidade |
 |---|---|
@@ -286,7 +285,7 @@ mensagens comuns nem vê quem está jogando o quê — tudo passa por comando e 
 Dois detalhes que explicam decisões do código:
 
 - **O `/grupo` responde na hora, sem "pensando...".** Editar uma mensagem no
-  Discord não dispara notificação — se o card fosse montado por edição, o ping do
+  Discord não dispara notificação se o card fosse montado por edição, o ping do
   cargo não avisaria ninguém e a mecânica 1 morreria.
 - **O id da mensagem é buscado com retentativa.** O Discord cria a mensagem da
   resposta um instante depois de receber o corpo; perguntar de primeira pega 404
