@@ -2,7 +2,13 @@
 
 import { RESPOSTA, api, editarResposta, responderExtra, ehAdmin } from "./discord.js";
 import { buscarJogo } from "./jogos.js";
-import { buscarGrupo, redesenharCard, abrirThread, membrosDoGrupo } from "./grupos.js";
+import {
+  buscarGrupo,
+  redesenharCard,
+  abrirThread,
+  membrosDoGrupo,
+  marcarParaApagar,
+} from "./grupos.js";
 import { sairDaFila } from "./fila.js";
 
 // ------------------------------------------------- botão do painel de cargos
@@ -113,7 +119,12 @@ async function btnEncerrar(env, interacao, grupoId) {
   }
 
   grupo.estado = "encerrado";
-  await env.DB.prepare("UPDATE grupos SET estado = 'encerrado' WHERE id = ?").bind(grupo.id).run();
+  marcarParaApagar(grupo);
+  await env.DB.prepare(
+    "UPDATE grupos SET estado = 'encerrado', apagar_em = ? WHERE id = ?"
+  )
+    .bind(grupo.apagar_em, grupo.id)
+    .run();
   await atualizarCard(env, interacao, grupo);
 }
 

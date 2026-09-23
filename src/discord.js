@@ -95,6 +95,32 @@ export async function editarResposta(interacao, corpo) {
   return res.json();
 }
 
+// Busca a mensagem que o Discord criou como resposta da interação.
+//
+// O Discord só cria essa mensagem um instante DEPOIS de receber nosso corpo, e
+// quem chama isto roda em paralelo a esse envio — perguntar de primeira pega um
+// 404 de vez em quando. Sem o id salvo, o cron nunca consegue expirar nem apagar
+// o card, e a falha é silenciosa: o card fica com os botões vivos para sempre.
+export async function buscarMensagemOriginal(env, interacao, tentativas = 4) {
+  let ultimoErro;
+
+  for (let i = 0; i < tentativas; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, 400 * i));
+    }
+    try {
+      return await api(
+        env,
+        `/webhooks/${interacao.application_id}/${interacao.token}/messages/@original`
+      );
+    } catch (err) {
+      ultimoErro = err;
+    }
+  }
+
+  throw ultimoErro;
+}
+
 // Mensagem extra na mesma interação — usada para avisar erro sem sobrescrever
 // o card que acabou de ser atualizado.
 export async function responderExtra(interacao, corpo) {

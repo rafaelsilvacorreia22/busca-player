@@ -11,7 +11,7 @@ import {
 } from "./discord.js";
 import { COMANDOS, DEFINICOES, autocompletarJogo } from "./comandos.js";
 import { COMPONENTES } from "./componentes.js";
-import { expirarVencidos } from "./grupos.js";
+import { expirarVencidos, apagarCardsVencidos } from "./grupos.js";
 import { limparFilaVencida } from "./fila.js";
 
 const SO_NO_SERVIDOR = {
@@ -180,8 +180,11 @@ export default {
     ctx.waitUntil(
       (async () => {
         const expirados = await expirarVencidos(env);
+        const apagados = await apagarCardsVencidos(env);
         const limpos = await limparFilaVencida(env);
-        console.log(`cron: ${expirados} grupo(s) expirado(s), ${limpos} da fila limpos`);
+        console.log(
+          `cron: ${expirados} expirado(s), ${apagados} card(s) apagado(s), ${limpos} da fila limpos`
+        );
       })()
     );
   },

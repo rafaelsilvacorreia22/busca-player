@@ -8,8 +8,8 @@
 import {
   RESPOSTA,
   EFEMERA,
-  api,
   editarResposta,
+  buscarMensagemOriginal,
   ehAdmin,
 } from "./discord.js";
 import {
@@ -203,10 +203,7 @@ async function cmdGrupo(env, interacao, ctx) {
   ctx.waitUntil(
     (async () => {
       try {
-        const msg = await api(
-          env,
-          `/webhooks/${interacao.application_id}/${interacao.token}/messages/@original`
-        );
+        const msg = await buscarMensagemOriginal(env, interacao);
         await env.DB.prepare("UPDATE grupos SET mensagem_id = ? WHERE id = ?")
           .bind(msg.id, grupo.id)
           .run();

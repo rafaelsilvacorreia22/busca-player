@@ -5,6 +5,16 @@ import { api } from "./discord.js";
 
 export const DURACAO_PADRAO_HORAS = 3;
 
+// Quanto tempo um card morto (encerrado/expirado) fica visível antes do bot
+// apagar a mensagem. Existe para o canal não virar um cemitério de cards, mas
+// sem sumir na cara de quem acabou de clicar — daí a hora de carência.
+export const HORAS_ATE_APAGAR = 1;
+
+export function marcarParaApagar(grupo) {
+  grupo.apagar_em = Date.now() + HORAS_ATE_APAGAR * 3600_000;
+  return grupo.apagar_em;
+}
+
 export async function membrosDoGrupo(env, grupoId) {
   const { results } = await env.DB.prepare(
     "SELECT usuario_id FROM grupo_membros WHERE grupo_id = ? ORDER BY entrou_em"
@@ -48,6 +58,16 @@ export function montarCard(jogo, grupo, membros) {
   const segundos = Math.floor(grupo.expira_em / 1000);
   if (grupo.estado === "aberto") {
     campos.push({ name: "Expira", value: `<t:${segundos}:R>`, inline: false });
+  }
+
+  // Avisa que o card vai sumir, senão a mensagem desaparece do nada e parece
+  // que alguém apagou.
+  if (grupo.apagar_em) {
+    campos.push({
+      name: "​",
+      value: `_Esta mensagem some <t:${Math.floor(grupo.apagar_em / 1000)}:R>._`,
+      inline: false,
+    });
   }
 
   const embed = {
@@ -150,8 +170,11 @@ export async function expirarVencidos(env) {
 
   for (const grupo of results ?? []) {
     grupo.estado = "expirado";
-    await env.DB.prepare("UPDATE grupos SET estado = 'expirado' WHERE id = ?")
-      .bind(grupo.id)
+    marcarParaApagar(grupo);
+    await env.DB.prepare(
+      "UPDATE grupos SET estado = 'expirado', apagar_em = ? WHERE id = ?"
+    )
+      .bind(grupo.apagar_em, grupo.id)
       .run();
 
     if (!grupo.mensagem_id) continue;
@@ -167,4 +190,43 @@ export async function expirarVencidos(env) {
   }
 
   return (results ?? []).length;
+}
+
+// Roda no cron logo depois da expiração: remove do canal os cards mortos cuja
+// carência já venceu.
+//
+// Grupos que geraram thread ficam de fora de propósito: no Discord, apagar a
+// mensagem apaga junto a thread pendurada nela, e ali tem conversa de gente que
+// combinou de jogar. Card sem thread não leva nada embora.
+export async function apagarCardsVencidos(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, canal_id, mensagem_id FROM grupos " +
+      "WHERE apagar_em IS NOT NULL AND apagar_em < ? " +
+      "AND mensagem_id IS NOT NULL AND thread_id IS NULL"
+  )
+    .bind(Date.now())
+    .all();
+
+  let apagados = 0;
+
+  for (const grupo of results ?? []) {
+    try {
+      await api(env, `/channels/${grupo.canal_id}/messages/${grupo.mensagem_id}`, {
+        method: "DELETE",
+      });
+      apagados++;
+    } catch (err) {
+      // 404 = alguém já apagou na mão. Nos dois casos a linha é finalizada
+      // abaixo, senão o cron tentaria de novo a cada 5 minutos para sempre.
+      console.log("Não apaguei o card do grupo", grupo.id, "-", err.message);
+    }
+
+    await env.DB.prepare(
+      "UPDATE grupos SET mensagem_id = NULL, apagar_em = NULL WHERE id = ?"
+    )
+      .bind(grupo.id)
+      .run();
+  }
+
+  return apagados;
 }
