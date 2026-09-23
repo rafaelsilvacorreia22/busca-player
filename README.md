@@ -1,216 +1,297 @@
-# busca-player — buscar grupo
+# busca-player
 
-Bot de LFG do servidor Gamepass Brasil. Implementa as quatro mecânicas que
-resolvem o canal `#buscar-grupo`:
+Bot de Discord que faz um canal de "procuro grupo" realmente funcionar.
 
-1. **Cargo por jogo com ping dirigido** — painel de botões onde cada um marca o
-   que joga. Quem abre grupo menciona só o cargo daquele jogo.
-2. **`/grupo` com botão "Tô dentro"** — entrar é um clique, não uma mensagem
-   pública para um estranho.
-3. **Expiração em 3h** — o card perde os botões sozinho. Regra: se está com
-   botão, está valendo.
-4. **`/avisar` — fila assíncrona** — registra que você quer jogar; quando outra
-   pessoa quiser o mesmo jogo, o bot chama os dois na DM.
-
-Roda em Cloudflare Worker + D1. Já está publicado em
-`https://busca-player.aniversarios-dc.workers.dev` — falta só a parte do Discord.
+O problema que ele resolve é conhecido: alguém escreve *"alguém pra jogar X?"*, a
+mensagem não alcança quem joga X, ninguém responde, o canal vira cemitério e as
+pessoas param de tentar. Este bot ataca as quatro causas disso.
 
 ---
 
-## Como usar no seu servidor
+## Como funciona no dia a dia
 
-### 1. Criar a aplicação no Discord
+### 1. Cada um marca o que joga — e só é avisado disso
 
-1. Abra https://discord.com/developers/applications → **New Application**.
-2. Nome: o que você quiser (ex.: `Speranza`). Aceite os termos → **Create**.
-3. Ainda em **General Information**, clique no quadrado do ícone e suba o arquivo
-   `assets/avatar.png` (o fantasminha, já recortado em 512×512).
-4. Nessa mesma página, copie a **PUBLIC KEY**. Guarde.
+Uma mensagem fixa no canal tem um botão por jogo. Clicou, ganhou o cargo daquele
+jogo; clicou de novo, saiu.
 
-### 2. Pegar o token do bot
+Quem abre grupo menciona **só o cargo daquele jogo**. Quem joga recebe
+notificação de verdade; quem não joga nunca é incomodado. É o que impede o canal
+de ser mutado por todo mundo.
 
-1. Menu lateral → **Bot**.
-2. **Reset Token** → **Yes, do it!** → **Copy**. Guarde.
-   O token aparece **uma vez só** — se perder, é só resetar de novo.
-3. Desça até **Privileged Gateway Intents** e deixe **tudo desligado**. Este bot
-   não lê mensagens nem presença, então não precisa de nenhum intent.
+Os cargos nascem **não-mencionáveis**: só o bot menciona, e só dentro de um card
+de grupo. Sem isso vira abuso de ping em uma semana.
 
-### 3. Colocar os dois valores na Cloudflare
-
-Pelo painel (só clique):
-
-1. https://dash.cloudflare.com → **Compute (Workers)** → **busca-player**.
-2. **Settings** → **Variables and Secrets** → **+ Add**.
-3. Type: **Secret**. Nome: `DISCORD_TOKEN`. Valor: o token do passo 2. **Add**.
-4. Repita para `DISCORD_PUBLIC_KEY` com a public key do passo 1.
-   > Já existe um `DISCORD_PUBLIC_KEY` com um valor de teste que usei para
-   > validar a assinatura. **Edite e substitua** pelo valor real.
-5. **Deploy** para as mudanças valerem.
-
-Ou pelo terminal, se preferir (ele pergunta o valor, não fica no histórico):
-
-```bash
-cd "C:\Users\rafae\Documents\busca-player"; npx wrangler secret put DISCORD_TOKEN
-```
-
-```bash
-cd "C:\Users\rafae\Documents\busca-player"; npx wrangler secret put DISCORD_PUBLIC_KEY
-```
-
-### 4. Apontar o endpoint de interações
-
-1. Volte em **General Information** na página da aplicação.
-2. No campo **Interactions Endpoint URL**, cole:
+### 2. `/grupo` em vez de texto solto
 
 ```
-https://busca-player.aniversarios-dc.workers.dev/
+/grupo jogo:ARC Raiders vagas:3 quando:agora
 ```
 
-3. **Save Changes**. O Discord vai testar a assinatura na hora — se salvar sem
-   reclamar, está tudo certo. Se der erro, o `DISCORD_PUBLIC_KEY` está errado ou
-   o deploy do passo 3 não foi feito.
+O bot publica um card com o botão **"Tô dentro (1/3)"**. Entrar é um clique, não
+uma mensagem pública para um estranho — é isso que derruba o custo social de
+responder. O card mostra ao vivo quem já entrou e quantas vagas sobraram.
 
-### 5. Convidar o bot para o servidor
+Quem abriu já entra contado. `vagas:3` significa você + 2.
 
-1. Menu lateral → **OAuth2** → **OAuth2 URL Generator**.
-2. Em **Scopes**, marque `bot` **e** `applications.commands`.
-3. Em **Bot Permissions**, marque:
-   - Manage Roles
-   - Send Messages
-   - Embed Links
-   - Mention Everyone *(necessário para mencionar cargo não-mencionável)*
-   - Create Public Threads
-   - Send Messages in Threads
-   - Read Message History
-4. Copie a URL gerada lá embaixo, abra no navegador e adicione ao servidor.
+### 3. O card morre sozinho
 
-### 6. Subir o cargo do bot na hierarquia
+- **3 horas** depois de aberto, o card expira e perde os botões.
+- **1 hora** depois de encerrado ou expirado, a mensagem some do canal.
 
-**Configurações do Servidor → Cargos** → arraste o cargo do bot para **acima**
-de onde ficarão os cargos de jogo (pode ser bem no topo, abaixo só dos seus).
+A regra que isso cria é simples e absoluta: **se está com botão, está valendo.**
+Acaba a dúvida de "será que essa mensagem de ontem ainda vale?", e o canal não
+acumula card morto.
 
-Sem isso o bot cria os cargos mas não consegue dar para ninguém.
+Exceção: grupo que gerou thread não é apagado. No Discord, apagar a mensagem
+apaga a thread junto — e é lá que a galera combinou de jogar.
 
-### 7. Registrar os comandos
+### 4. `/avisar` — para quando não tem ninguém online
 
-Abra esta URL uma vez no navegador:
+Esta é a que faz servidor pequeno parecer grande.
 
 ```
-https://busca-player.aniversarios-dc.workers.dev/registrar-comandos?chave=SUA_CHAVE_AQUI
+/avisar jogo:ARC Raiders
 ```
 
-> A chave fica só no secret `SETUP_KEY` da Cloudflare — de propósito não está
-> escrita aqui, para não vazar junto com o repositório.
+Não publica nada. Registra que você quer jogar nas próximas horas. Quando outra
+pessoa registrar interesse no mesmo jogo, **o bot chama os dois na DM**. E se
+alguém abrir um `/grupo` daquele jogo, quem está na fila recebe o link direto.
 
-Deve responder algo como `{"ok":true,"aplicacao":"Speranza","servidores":["Gamepass Brasil"]}`.
+Isso converte o canal de síncrono (precisa de duas pessoas online no mesmo
+minuto, o que quase nunca acontece) para assíncrono.
 
-> Rode isso de novo sempre que eu mexer nos comandos. É seguro repetir.
+### Quando o grupo lota
 
-### 8. Publicar o painel
-
-No canal `#buscar-grupo`, digite `/painel`. O bot cria os cargos **ARC Raiders**
-e **WARDOGS** e publica a mensagem com os botões. Fixe essa mensagem no canal.
-
-### 9. Travar o canal (metade da solução)
-
-**Configurações do canal `#buscar-grupo` → Permissões → @everyone**:
-
-- **Enviar mensagens**: ❌ negar
-- **Usar comandos de aplicativo**: ✅ permitir
-- **Criar tópicos públicos**: ✅ permitir
-- **Enviar mensagens em tópicos**: ✅ permitir
-
-Isso é o que faz a estrutura pegar. Se continuar aceitando texto solto, as
-pessoas continuam postando texto solto e o bot vira enfeite.
-
-### 10. Limitar os comandos ao canal (opcional, sem código)
-
-Para o `/grupo` e o `/avisar` só funcionarem dentro do `#buscar-grupo` e não
-poluírem o resto do servidor:
-
-**Configurações do Servidor → Integrações → clique no bot → Gerenciar comandos**
-
-Lá dá para escolher, comando por comando, em quais canais ele aparece. Deixe
-`/grupo` e `/avisar` só no `#buscar-grupo`. Isso é do próprio Discord — o bot não
-precisa saber de nada.
+O bot cria uma thread no próprio card e marca os participantes lá dentro. Sem
+isso o grupo se forma e ninguém sabe para onde ir.
 
 ---
 
-## Como usar
+## Comandos
 
-| Comando | Quem | O que faz |
+| Comando | Quem pode | O que faz |
 |---|---|---|
-| `/grupo jogo: vagas: quando: obs:` | todos | Abre o card e chama o cargo do jogo |
+| `/grupo jogo: vagas: quando: obs: duracao:` | todos | Abre o card e chama o cargo do jogo |
 | `/avisar jogo: horas:` | todos | Entra na fila; o bot chama na DM quando aparecer companhia |
-| `/painel` | admin | Publica/atualiza o painel de cargos no canal atual |
-| `/jogo add nome: emoji: cargo: appid:` | admin | Cadastra um jogo novo |
+| `/painel` | admin | Publica ou atualiza o painel de cargos no canal atual |
+| `/jogo add nome: emoji: cargo: appid:` | admin | Cadastra um jogo |
 | `/jogo remover jogo:` | admin | Tira do painel |
 | `/jogo listar` | admin | Lista o que está cadastrado |
 
-### Adicionar um jogo novo
+Só `nome` e `vagas`/`jogo` são obrigatórios; o resto tem padrão.
 
-Um comando só, no Discord:
+## Adicionar um jogo novo
+
+Um comando, dentro do Discord. Nada de código muda.
+
+**Se o cargo já existe** (o caso comum — normalmente já há um cargo que dá acesso
+à call daquele jogo), aponte para ele:
+
+```
+/jogo add nome:League of Legends emoji:⚔️ cargo:@Summoners Rift
+```
+
+Assim clicar no botão do painel também libera a call. **Não crie um cargo novo se
+já existe um** — você fica com dois cargos de mesmo nome e ninguém entende qual é
+qual.
+
+**Se não existe**, omita `cargo:` que o bot cria:
 
 ```
 /jogo add nome:Battlefield 6 emoji:🪖
 ```
 
-O bot cria o cargo, cadastra e **atualiza o painel sozinho**. O jogo já aparece
-no autocomplete de `/grupo` e `/avisar`. Nada de código muda.
+Nos dois casos o painel se atualiza sozinho e o jogo já aparece no autocomplete
+de `/grupo` e `/avisar`.
 
-Se o cargo já existir (caso das calls privadas), passe em `cargo:` que ele
-reaproveita em vez de criar outro. O `appid:` é opcional e só serve para os
-avisos de patch da Steam, que entram depois.
+O `appid:` é opcional e guarda o AppID da Steam, para os avisos de patch notes
+que podem vir depois.
+
+---
+
+## Instalação
+
+Roda em Cloudflare Worker + D1. Ambos cabem no plano gratuito com folga.
+
+### 1. Criar a aplicação no Discord
+
+1. https://discord.com/developers/applications → **New Application**
+2. Dê um nome e suba um ícone em **General Information**
+3. Copie a **PUBLIC KEY** (dessa mesma página)
+4. Menu **Bot** → **Reset Token** → copie. **Aparece uma vez só.**
+5. Ainda em **Bot**, deixe os três *Privileged Gateway Intents* **desligados** —
+   este bot não lê mensagens nem presença
+
+### 2. Publicar o worker
+
+```bash
+npx wrangler d1 create busca-player
+```
+
+Copie o `database_id` devolvido para o `wrangler.jsonc`, e então:
+
+```bash
+npx wrangler d1 execute busca-player --remote --file=schema.sql
+```
+
+```bash
+npx wrangler deploy
+```
+
+### 3. Configurar os segredos
+
+```bash
+npx wrangler secret put DISCORD_TOKEN
+```
+
+```bash
+npx wrangler secret put DISCORD_PUBLIC_KEY
+```
+
+```bash
+npx wrangler secret put SETUP_KEY
+```
+
+`SETUP_KEY` é um valor aleatório que você inventa — ele protege a rota que
+registra os comandos. Cada comando pergunta o valor no terminal, então nada fica
+no histórico.
+
+### 4. Ligar o Discord ao worker
+
+Em **General Information**, no campo **Interactions Endpoint URL**, cole a URL do
+worker (termina em `.workers.dev/`) e salve.
+
+O Discord testa na hora, mandando um PING assinado. **Se salvar sem reclamar, a
+ponte está validada.** Se der erro, a `DISCORD_PUBLIC_KEY` está errada.
+
+### 5. Convidar o bot
+
+**OAuth2 → URL Generator**, marcando os scopes `bot` e `applications.commands`, e
+as permissões:
+
+- Manage Roles
+- Send Messages · Embed Links · Read Message History
+- **Mention Everyone** (necessário para mencionar cargo não-mencionável)
+- Create Public Threads · Send Messages in Threads
+
+### 6. Registrar os comandos
+
+Abra no navegador, uma vez:
+
+```
+https://SEU-WORKER.workers.dev/registrar-comandos?chave=SUA_SETUP_KEY
+```
+
+Deve responder `{"ok":true,...}` listando os servidores. Repita sempre que os
+comandos mudarem — é seguro rodar de novo.
+
+### 7. Publicar o painel
+
+No canal escolhido, digite `/painel` e fixe a mensagem.
+
+### 8. Travar o canal
+
+**Permissões do canal → @everyone**: negue **Enviar mensagens**, mantendo
+permitidos *Usar comandos de aplicativo*, *Criar tópicos públicos* e *Enviar
+mensagens em tópicos*.
+
+Esse passo vale tanto quanto o bot. Se o canal continuar aceitando texto solto, as
+pessoas continuam postando texto solto e a estrutura nunca pega.
+
+Opcionalmente, em **Configurações do Servidor → Integrações → o bot → Gerenciar
+comandos**, limite `/grupo` e `/avisar` a esse canal só.
+
+---
+
+## As duas permissões que quebram na prática
+
+Se algo não funcionar, é quase certo que seja uma destas — as duas dão erro
+silencioso ou confuso.
+
+**1. O cargo do bot precisa estar ACIMA dos cargos de jogo.**
+Em **Configurações do Servidor → Cargos**, arraste o cargo do bot para cima dos
+cargos que ele vai distribuir. Um bot não consegue dar um cargo que esteja acima
+do dele na lista. Bots entram no fim da hierarquia, então isso quase sempre
+precisa ser ajustado na mão.
+
+**2. O bot precisa de permissão no canal, não só no servidor.**
+Canal com permissões próprias ignora o que foi dado no convite. Em **Permissões
+do canal**, adicione o cargo do bot e libere: *Ver canal*, *Enviar mensagens*,
+*Inserir links*, *Mencionar @everyone e todos os cargos*, *Criar tópicos
+públicos*, *Enviar mensagens em tópicos*, *Ver histórico*.
+
+Quando um comando falha, o bot responde com a mensagem crua do Discord numa
+mensagem que só você vê — normalmente ela já diz qual permissão falta.
 
 ---
 
 ## Manutenção
 
-Publicar mudanças no código:
+Publicar mudanças de código:
 
 ```bash
-cd "C:\Users\rafae\Documents\busca-player"; npx wrangler deploy
+npx wrangler deploy
 ```
 
-Ver o que está acontecendo ao vivo (útil quando algo não funciona):
+Ver o que está acontecendo ao vivo:
 
 ```bash
-cd "C:\Users\rafae\Documents\busca-player"; npx wrangler tail
+npx wrangler tail
+```
+
+**Mudanças de banco:** o `schema.sql` usa `CREATE TABLE IF NOT EXISTS`, que não
+altera tabela existente. Então toda mudança de coluna em banco já no ar entra como
+um arquivo em `migracoes/`, rodado uma vez:
+
+```bash
+npx wrangler d1 execute busca-player --remote --file=migracoes/001-apagar-cards-mortos.sql
 ```
 
 ### Se der problema
 
 | Sintoma | Causa provável |
 |---|---|
-| Discord não salva a Interactions URL | `DISCORD_PUBLIC_KEY` errado, ou faltou dar Deploy depois de salvar o secret |
-| Comandos não aparecem ao digitar `/` | Passo 7 não foi feito, ou o bot entrou sem o scope `applications.commands` |
-| Botão do painel diz que não conseguiu mexer no cargo | Passo 6: cargo do bot está abaixo dos cargos de jogo |
-| Card aparece mas ninguém é notificado | Falta a permissão **Mention Everyone** no canal |
-| `/avisar` diz que mandou DM e nada chega | A pessoa está com DM de membros do servidor desativada |
+| Discord não salva a Interactions URL | `DISCORD_PUBLIC_KEY` errada, ou faltou publicar depois de gravar o segredo |
+| Comandos não aparecem ao digitar `/` | Passo 6 não foi feito, ou faltou o scope `applications.commands` |
+| Botão do painel reclama de cargo | Cargo do bot abaixo dos cargos de jogo (ver acima) |
+| `/painel` responde "Missing Permissions" | Permissão faltando **no canal** (ver acima) |
+| Card aparece mas ninguém é notificado | Falta **Mention Everyone** no canal |
+| Dois comandos iguais no autocomplete | Outro bot usa o mesmo nome — confira a coluna da direita antes de escolher |
+| `/avisar` diz que mandou DM e nada chega | A pessoa tem DM de membros do servidor desativada |
 
 ---
 
-## Arquivos
+## Como está montado
 
-- `src/index.js` — recebe as interações, roteia e roda o cron
-- `src/discord.js` — assinatura Ed25519 e chamadas REST
-- `src/comandos.js` — os slash commands
-- `src/componentes.js` — os botões
-- `src/jogos.js` — cadastro de jogos e painel de cargos
-- `src/grupos.js` — card do grupo, expiração e abertura da thread
-- `src/fila.js` — fila assíncrona e as DMs
-- `schema.sql` — as tabelas do D1
-- `assets/avatar.png` — avatar do bot
+Não usa gateway nem conexão permanente: tudo são interações HTTP assinadas, o que
+permite rodar num Worker sem servidor ligado. A contrapartida é que o bot não lê
+mensagens comuns nem vê quem está jogando o quê — tudo passa por comando e botão.
 
-## Backup no GitHub (opcional)
+| Arquivo | Responsabilidade |
+|---|---|
+| `src/index.js` | Recebe as interações, roteia e roda o cron |
+| `src/discord.js` | Assinatura Ed25519 e chamadas REST |
+| `src/comandos.js` | Slash commands |
+| `src/componentes.js` | Botões |
+| `src/jogos.js` | Cadastro de jogos e painel de cargos |
+| `src/grupos.js` | Card, expiração, remoção e thread |
+| `src/fila.js` | Fila assíncrona e DMs |
+| `schema.sql` | Tabelas do D1 |
+| `migracoes/` | Alterações de schema em banco já no ar |
 
-Diferente do `wardogs-bot`, aqui o GitHub **não é necessário** — quem roda o bot
-é a Cloudflare, não o GitHub Actions. Se quiser guardar uma cópia:
+**Tabelas:** `jogos` (cadastro), `grupos` + `grupo_membros` (cards abertos),
+`fila` (o `/avisar`), `config` (onde o painel foi publicado).
 
-1. https://github.com/new → nome `busca-player` → **Private** → Create.
-2. Na tela seguinte, clique em **uploading an existing file**.
-3. Arraste os arquivos e a pasta `src/`.
-4. Commit changes.
+Dois detalhes que explicam decisões do código:
 
-Não suba nada com o token dentro — ele só existe como secret na Cloudflare, e
-este repositório não tem nenhum arquivo com segredo.
+- **O `/grupo` responde na hora, sem "pensando...".** Editar uma mensagem no
+  Discord não dispara notificação — se o card fosse montado por edição, o ping do
+  cargo não avisaria ninguém e a mecânica 1 morreria.
+- **O id da mensagem é buscado com retentativa.** O Discord cria a mensagem da
+  resposta um instante depois de receber o corpo; perguntar de primeira pega 404
+  de vez em quando. Sem esse id salvo, o cron não conseguiria expirar nem apagar
+  o card, e a falha seria silenciosa.
+
+O cron roda a cada 5 minutos: expira grupos vencidos, apaga cards mortos cuja
+carência acabou e limpa a fila.

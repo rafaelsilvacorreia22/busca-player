@@ -27,10 +27,13 @@ CREATE TABLE IF NOT EXISTS grupos (
   criado_em   INTEGER NOT NULL,
   expira_em   INTEGER NOT NULL,
   estado      TEXT    NOT NULL DEFAULT 'aberto', -- aberto | cheio | expirado | encerrado
-  thread_id   TEXT
+  thread_id   TEXT,
+  -- Quando a mensagem do card morto deve sair do canal. Nulo = nada agendado.
+  apagar_em   INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_grupos_expiracao ON grupos (estado, expira_em);
+CREATE INDEX IF NOT EXISTS idx_grupos_remocao ON grupos (apagar_em);
 
 CREATE TABLE IF NOT EXISTS grupo_membros (
   grupo_id   INTEGER NOT NULL,
